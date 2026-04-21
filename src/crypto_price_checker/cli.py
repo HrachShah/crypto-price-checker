@@ -1,0 +1,89 @@
+"""CLI for crypto price checker."""
+
+import json
+import sys
+import time
+from typing import Any
+
+import click
+import requests
+
+
+class CryptoPriceChecker:
+    """Check cryptocurrency prices via CoinGecko API."""
+
+    BASE_URL = "https://api.coingecko.com/api/v3"
+    CACHE = {}
+    CACHE_TTL = 60  # seconds
+
+    def __init__(self):
+        self.session = requests.Session()
+        self.session.headers["Accept"] = "application/json"
+
+    def get_price(self, coin_id: str, currency: str = "usd") -> dict[str, Any] | None:
+        """Get current price for a coin."""
+        cache_key = f"{coin_id}:{currency}"
+        now = time.time()
+
+        if cache_key in self.CACHE:
+            cached_time, cached_data = self.CACHE[cache_key]
+            if now - cached_time < self.CACHE_TTL:
+                return cached_data
+
+        url = f"{self.BASE_URL}/simple/price"
+        params = {"ids": coin_id, "vs_currencies": currency, "include_24hr_change": "true"}
+
+        try:
+            response = self.session.get(url, params=params, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                if coin_id in data:
+                    result = {
+                        "coin": coin_id,
+                        "currency": currency,
+                        "price": data[coin_id].get(currency),
+                        "change_24h": data[coin_id].get(f"{currency}_24h_change"),
+                    }
+                    self.CACHE[cache_key] = (now, result)
+                    return result
+        except requests.RequestException:
+            pass
+        return None
+
+    def get_prices(self, coin_ids: list[str], currency: str = "usd") -> list[dict[str, Any]]:
+        """Get prices for multiple coins."""
+        results = []
+        for coin_id in coin_ids:
+            result = self.get_price(coin_id.lower(), currency)
+            if result:
+                results.append(result)
+        return results
+
+
+@click.command()
+@click.argument("coins", nargs=-1)
+@click.option("--currency", "-c", default="usd", help="Currency to show price in (default: usd)")
+def main(coins: tuple[str, ...], currency: str) -> None:
+    """Check cryptocurrency prices."""
+    if not coins:
+        click.echo("Usage: crypto-price COIN [COIN ...]")
+        click.echo("Example: crypto-price bitcoin ethereum")
+        sys.exit(1)
+
+    checker = CryptoPriceChecker()
+    results = checker.get_prices(list(coins), currency)
+
+    if not results:
+        click.echo("Could not fetch prices. Check coin IDs and try again.")
+        sys.exit(1)
+
+    for r in results:
+        price = r["price"]
+        change = r["change_24h"]
+        change_str = f"{change:+.2f}%" if change is not None else "N/A"
+        symbol = r["coin"].upper()
+        click.echo(f"{symbol}: {price:.6f} {currency.upper()} ({change_str})")
+
+
+if __name__ == "__main__":
+    main()

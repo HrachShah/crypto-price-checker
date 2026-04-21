@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "crypto-price-checker"
+version = "0.1.0"
+description = "Simple CLI for checking cryptocurrency prices"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+dependencies = ["requests>=2.28.0", "click>=8.0.0"]
+
+[project.scripts]
+crypto-price = "crypto_price_checker.cli:main"

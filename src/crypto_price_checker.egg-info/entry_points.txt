@@ -1,0 +1,2 @@
+[console_scripts]
+crypto-price = crypto_price_checker.cli:main

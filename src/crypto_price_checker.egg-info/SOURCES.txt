@@ -1,0 +1,11 @@
+README.md
+pyproject.toml
+src/crypto_price_checker/__init__.py
+src/crypto_price_checker/cli.py
+src/crypto_price_checker.egg-info/PKG-INFO
+src/crypto_price_checker.egg-info/SOURCES.txt
+src/crypto_price_checker.egg-info/dependency_links.txt
+src/crypto_price_checker.egg-info/entry_points.txt
+src/crypto_price_checker.egg-info/requires.txt
+src/crypto_price_checker.egg-info/top_level.txt
+tests/test_crypto_price_checker.py

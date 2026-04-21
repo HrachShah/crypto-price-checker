@@ -1,0 +1,51 @@
+Metadata-Version: 2.4
+Name: crypto-price-checker
+Version: 0.1.0
+Summary: Simple CLI for checking cryptocurrency prices
+License: MIT
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: requests>=2.28.0
+Requires-Dist: click>=8.0.0
+
+# Crypto Price Checker
+
+A simple Python CLI tool for checking cryptocurrency prices using the CoinGecko API.
+
+## Features
+
+- Check current price of any cryptocurrency
+- Compare multiple coins in one command
+- Show 24h price change
+- Cache results to avoid rate limiting
+
+## Installation
+
+```bash
+pip install crypto-price-checker
+```
+
+Or from source:
+
+```bash
+git clone https://github.com/HrachShah/crypto-price-checker.git
+cd crypto-price-checker
+pip install -e .
+```
+
+## Usage
+
+```bash
+# Check Bitcoin price
+crypto-price bitcoin
+
+# Check multiple coins
+crypto-price bitcoin ethereum solana
+
+# Show in specific currency
+crypto-price bitcoin --currency eur
+```
+
+## License
+
+MIT
