@@ -51,13 +51,45 @@ class CryptoPriceChecker:
         return None
 
     def get_prices(self, coin_ids: list[str], currency: str = "usd") -> list[dict[str, Any]]:
-        """Get prices for multiple coins."""
-        results = []
-        for coin_id in coin_ids:
-            result = self.get_price(coin_id.lower(), currency)
-            if result:
-                results.append(result)
-        return results
+        """Get prices for multiple coins in a single API call."""
+        if not coin_ids:
+            return []
+        
+        url = f"{self.BASE_URL}/simple/price"
+        cache_key_parts = sorted(set(coin_ids))  # dedupe for consistent cache key
+        cache_key = f"{','.join(cache_key_parts)}:{currency}"
+        now = time.time()
+
+        if cache_key in self.CACHE:
+            cached_time, cached_data = self.CACHE[cache_key]
+            if now - cached_time < self.CACHE_TTL:
+                return cached_data
+
+        params = {
+            "ids": ",".join(coin_ids),
+            "vs_currencies": currency,
+            "include_24hr_change": "true",
+        }
+
+        try:
+            response = self.session.get(url, params=params, timeout=15)
+            if response.status_code == 200:
+                data = response.json()
+                results = []
+                for coin_id in coin_ids:
+                    if coin_id in data:
+                        results.append({
+                            "coin": coin_id,
+                            "currency": currency,
+                            "price": data[coin_id].get(currency),
+                            "change_24h": data[coin_id].get(f"{currency}_24h_change"),
+                        })
+                if results:
+                    self.CACHE[cache_key] = (now, results)
+                return results
+        except requests.RequestException:
+            pass
+        return []
 
 
 @click.command()
