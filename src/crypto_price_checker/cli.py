@@ -114,7 +114,10 @@ def main(coins: tuple[str, ...], currency: str) -> None:
         change = r["change_24h"]
         change_str = f"{change:+.2f}%" if change is not None else "N/A"
         symbol = r["coin"].upper()
-        click.echo(f"{symbol}: {price:.6f} {currency.upper()} ({change_str})")
+        if price is None:
+            click.echo(f"{symbol}: N/A {currency.upper()} ({change_str})")
+        else:
+            click.echo(f"{symbol}: {price:.6f} {currency.upper()} ({change_str})")
 
 
 if __name__ == "__main__":
