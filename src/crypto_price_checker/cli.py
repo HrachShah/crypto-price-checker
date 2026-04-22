@@ -56,8 +56,8 @@ class CryptoPriceChecker:
             return []
         
         url = f"{self.BASE_URL}/simple/price"
-        cache_key_parts = sorted(set(coin_ids))  # dedupe for consistent cache key
-        cache_key = f"{','.join(cache_key_parts)}:{currency}"
+        coin_ids_tuple = tuple(coin_ids)  # preserve order for correct cache matching
+        cache_key = f"{','.join(coin_ids_tuple)}:{currency}"
         now = time.time()
 
         if cache_key in self.CACHE:
