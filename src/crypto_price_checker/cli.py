@@ -50,6 +50,18 @@ class CryptoPriceChecker:
             pass
         return None
 
+    def _format_price(self, price: float | None, currency: str) -> str:
+        """Format a price with an appropriate number of decimal places."""
+        if price is None:
+            return "N/A"
+        if price >= 1000:
+            return f"{price:.2f}"
+        if price >= 1:
+            return f"{price:.4f}"
+        if price >= 0.01:
+            return f"{price:.6f}"
+        return f"{price:.8f}"
+
     def get_prices(self, coin_ids: list[str], currency: str = "usd") -> list[dict[str, Any]]:
         """Get prices for multiple coins in a single API call."""
         if not coin_ids:
@@ -114,10 +126,7 @@ def main(coins: tuple[str, ...], currency: str) -> None:
         change = r["change_24h"]
         change_str = f"{change:+.2f}%" if change is not None else "N/A"
         symbol = r["coin"].upper()
-        if price is None:
-            click.echo(f"{symbol}: N/A {currency.upper()} ({change_str})")
-        else:
-            click.echo(f"{symbol}: {price:.6f} {currency.upper()} ({change_str})")
+        click.echo(f"{symbol}: {checker._format_price(price, currency)} {currency.upper()} ({change_str})")
 
 
 if __name__ == "__main__":
