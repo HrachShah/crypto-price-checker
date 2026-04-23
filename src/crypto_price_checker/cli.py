@@ -68,7 +68,7 @@ class CryptoPriceChecker:
             return []
         
         url = f"{self.BASE_URL}/simple/price"
-        cache_key = f"{','.join(coin_ids)}:{currency}"
+        cache_key = f"{','.join(sorted(coin_ids))}:{currency}"
         now = time.time()
 
         if cache_key in self.CACHE:
