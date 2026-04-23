@@ -60,7 +60,9 @@ class CryptoPriceChecker:
             return f"{price:.4f}"
         if price >= 0.01:
             return f"{price:.6f}"
-        return f"{price:.8f}"
+        if price >= 0.00000001:
+            return f"{price:.8f}"
+        return repr(price)
 
     def get_prices(self, coin_ids: list[str], currency: str = "usd") -> list[dict[str, Any]]:
         """Get prices for multiple coins in a single API call."""
