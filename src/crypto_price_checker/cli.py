@@ -84,8 +84,7 @@ class CryptoPriceChecker:
                             "price": data[coin_id].get(currency),
                             "change_24h": data[coin_id].get(f"{currency}_24h_change"),
                         })
-                if results:
-                    self.CACHE[cache_key] = (now, results)
+                self.CACHE[cache_key] = (now, results)
                 return results
         except requests.RequestException:
             pass
