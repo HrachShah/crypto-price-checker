@@ -62,7 +62,11 @@ class CryptoPriceChecker:
             return f"{price:.6f}"
         if price >= 0.00000001:
             return f"{price:.8f}"
-        return repr(price)
+        # Sub-satoshi values: format without scientific notation.
+        # Format to the number of decimal places needed to uniquely identify
+        # the value, up to 12 places (beyond what any exchange uses).
+        formatted = f"{price:.12f}".rstrip("0").rstrip(".")
+        return formatted if formatted != "0" else repr(price)
 
     def get_prices(self, coin_ids: list[str], currency: str = "usd") -> list[dict[str, Any]]:
         """Get prices for multiple coins in a single API call."""
