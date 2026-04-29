@@ -46,6 +46,10 @@ class CryptoPriceChecker:
                     }
                     self.CACHE[cache_key] = (now, result)
                     return result
+        except requests.Timeout:
+            pass
+        except requests.ConnectionError:
+            pass
         except Exception:
             pass
         return None
