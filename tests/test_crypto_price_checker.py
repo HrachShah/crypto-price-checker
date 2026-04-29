@@ -2,6 +2,7 @@
 
 import unittest
 from unittest.mock import MagicMock, patch
+import requests
 
 from crypto_price_checker.cli import CryptoPriceChecker
 
@@ -39,8 +40,10 @@ class TestCryptoPriceChecker(unittest.TestCase):
     def test_get_prices_filters_none(self):
         """get_prices filters out failed price lookups."""
         checker = CryptoPriceChecker()
-        with patch.object(checker, "get_price") as mock_get_price:
-            mock_get_price.return_value = None
+        # Clear the shared cache so get_prices does not return a cached result
+        CryptoPriceChecker.CACHE.clear()
+        with patch.object(checker.session, "get") as mock_get:
+            mock_get.side_effect = requests.RequestException("Network error")
             results = checker.get_prices(["bitcoin", "invalid-coin"], "usd")
             self.assertEqual(results, [])
 
