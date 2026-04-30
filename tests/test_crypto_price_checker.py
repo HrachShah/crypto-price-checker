@@ -38,12 +38,11 @@ class TestCryptoPriceChecker(unittest.TestCase):
             self.assertIsNone(result)
 
     def test_get_prices_filters_none(self):
-        """get_prices filters out failed price lookups."""
+        """get_prices returns empty list when the API call fails."""
         checker = CryptoPriceChecker()
-        # Clear the shared cache so get_prices does not return a cached result
         CryptoPriceChecker.CACHE.clear()
         with patch.object(checker.session, "get") as mock_get:
-            mock_get.side_effect = requests.RequestException("Network error")
+            mock_get.side_effect = ConnectionError("network unavailable")
             results = checker.get_prices(["bitcoin", "invalid-coin"], "usd")
             self.assertEqual(results, [])
 
@@ -79,9 +78,15 @@ class TestCryptoPriceCheckerCache(unittest.TestCase):
         now = time.time()
         old_time = now - checker.CACHE_TTL - 1
         checker.CACHE["bitcoin:usd"] = (old_time, {"price": 50000.0})
-        result = checker.get_price("bitcoin", "usd")
+        with patch.object(checker.session, "get") as mock_get:
+            mock_get.return_value = MagicMock(
+                status_code=200,
+                json=MagicMock(return_value={"bitcoin": {"usd": 95000.0, "usd_24h_change": 2.1}})
+            )
+            result = checker.get_price("bitcoin", "usd")
         self.assertIsNotNone(result)
         self.assertNotEqual(result.get("price"), 50000.0)
+        self.assertEqual(result.get("price"), 95000.0)
 
 
 if __name__ == "__main__":

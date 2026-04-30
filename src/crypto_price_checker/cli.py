@@ -100,8 +100,6 @@ class CryptoPriceChecker:
                 if results and all(coin_id in data for coin_id in coin_ids):
                     self.CACHE[cache_key] = (now, results)
                 return results
-        except requests.RequestException:
-            pass
         except Exception:
             pass
         return []
