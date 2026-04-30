@@ -1,5 +1,6 @@
 """CLI for crypto price checker."""
 
+import math
 import json
 import sys
 import time
@@ -52,7 +53,7 @@ class CryptoPriceChecker:
 
     def _format_price(self, price: float | None, currency: str) -> str:
         """Format a price with an appropriate number of decimal places."""
-        if price is None:
+        if price is None or not isinstance(price, (int, float)) or not math.isfinite(price):
             return "N/A"
         if price >= 1000:
             return f"{price:.2f}"
@@ -96,10 +97,12 @@ class CryptoPriceChecker:
                             "price": data[coin_id].get(currency),
                             "change_24h": data[coin_id].get(f"{currency}_24h_change"),
                         })
-                if results:
+                if results and all(coin_id in data for coin_id in coin_ids):
                     self.CACHE[cache_key] = (now, results)
                 return results
         except requests.RequestException:
+            pass
+        except Exception:
             pass
         return []
 
