@@ -2,6 +2,7 @@
 
 import unittest
 from unittest.mock import MagicMock, patch
+import requests
 
 from crypto_price_checker.cli import CryptoPriceChecker
 
@@ -32,7 +33,7 @@ class TestCryptoPriceChecker(unittest.TestCase):
         """get_price returns None when API fails."""
         checker = CryptoPriceChecker()
         with patch.object(checker.session, "get") as mock_get:
-            mock_get.side_effect = Exception("Network error")
+            mock_get.side_effect = requests.RequestException("Network error")
             result = checker.get_price("bitcoin", "usd")
             self.assertIsNone(result)
 
@@ -40,7 +41,7 @@ class TestCryptoPriceChecker(unittest.TestCase):
         """get_prices returns empty list when API call fails entirely."""
         checker = CryptoPriceChecker()
         with patch.object(checker.session, "get") as mock_get:
-            mock_get.side_effect = Exception("Network error")
+            mock_get.side_effect = requests.RequestException("Network error")
             results = checker.get_prices(["bitcoin", "invalid-coin"], "usd")
             self.assertEqual(results, [])
 

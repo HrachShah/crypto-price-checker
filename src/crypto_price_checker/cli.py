@@ -35,19 +35,21 @@ class CryptoPriceChecker:
 
         try:
             response = self.session.get(url, params=params, timeout=10)
-            if response.status_code == 200:
-                data = response.json()
-                if coin_id in data:
-                    result = {
-                        "coin": coin_id,
-                        "currency": currency,
-                        "price": data[coin_id].get(currency),
-                        "change_24h": data[coin_id].get(f"{currency}_24h_change"),
-                    }
-                    self.CACHE[cache_key] = (now, result)
-                    return result
-        except Exception:
-            pass
+            response.raise_for_status()
+            data = response.json()
+            if coin_id in data:
+                result = {
+                    "coin": coin_id,
+                    "currency": currency,
+                    "price": data[coin_id].get(currency),
+                    "change_24h": data[coin_id].get(f"{currency}_24h_change"),
+                }
+                self.CACHE[cache_key] = (now, result)
+                return result
+        except requests.RequestException as e:
+            print(f"API request failed for {coin_id}: {e}", file=sys.stderr)
+        except ValueError as e:
+            print(f"Failed to parse response for {coin_id}: {e}", file=sys.stderr)
         return None
 
     def _format_price(self, price: float | None, currency: str) -> str:
@@ -86,22 +88,25 @@ class CryptoPriceChecker:
 
         try:
             response = self.session.get(url, params=params, timeout=15)
-            if response.status_code == 200:
-                data = response.json()
-                results = []
-                for coin_id in coin_ids:
-                    if coin_id in data:
-                        results.append({
-                            "coin": coin_id,
-                            "currency": currency,
-                            "price": data[coin_id].get(currency),
-                            "change_24h": data[coin_id].get(f"{currency}_24h_change"),
-                        })
-                if results:
-                    self.CACHE[cache_key] = (now, results)
-                return results
-        except Exception:
-            pass
+            response.raise_for_status()
+            data = response.json()
+            results = []
+            for coin_id in coin_ids:
+                if coin_id in data:
+                    results.append({
+                        "coin": coin_id,
+                        "currency": currency,
+                        "price": data[coin_id].get(currency),
+                        "change_24h": data[coin_id].get(f"{currency}_24h_change"),
+                    })
+            # Only cache if all requested coins were found
+            if len(results) == len(coin_ids):
+                self.CACHE[cache_key] = (now, results)
+            return results
+        except requests.RequestException as e:
+            print(f"API request failed for batch price lookup: {e}", file=sys.stderr)
+        except ValueError as e:
+            print(f"Failed to parse response for batch price lookup: {e}", file=sys.stderr)
         return []
 
 
