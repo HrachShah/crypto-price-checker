@@ -35,18 +35,18 @@ class CryptoPriceChecker:
 
         try:
             response = self.session.get(url, params=params, timeout=10)
-            if response.status_code == 200:
-                data = response.json()
-                if coin_id in data:
-                    result = {
-                        "coin": coin_id,
-                        "currency": currency,
-                        "price": data[coin_id].get(currency),
-                        "change_24h": data[coin_id].get(f"{currency}_24h_change"),
-                    }
-                    self.CACHE[cache_key] = (now, result)
-                    return result
-        except Exception:
+            response.raise_for_status()
+            data = response.json()
+            if coin_id in data:
+                result = {
+                    "coin": coin_id,
+                    "currency": currency,
+                    "price": data[coin_id].get(currency),
+                    "change_24h": data[coin_id].get(f"{currency}_24h_change"),
+                }
+                self.CACHE[cache_key] = (now, result)
+                return result
+        except requests.RequestException:
             pass
         return None
 
@@ -73,21 +73,21 @@ class CryptoPriceChecker:
 
         try:
             response = self.session.get(url, params=params, timeout=15)
-            if response.status_code == 200:
-                data = response.json()
-                results = []
-                for coin_id in coin_ids:
-                    if coin_id in data:
-                        results.append({
-                            "coin": coin_id,
-                            "currency": currency,
-                            "price": data[coin_id].get(currency),
-                            "change_24h": data[coin_id].get(f"{currency}_24h_change"),
-                        })
-                if results:
-                    self.CACHE[cache_key] = (now, results)
-                return results
-        except Exception:
+            response.raise_for_status()
+            data = response.json()
+            results = []
+            for coin_id in coin_ids:
+                if coin_id in data:
+                    results.append({
+                        "coin": coin_id,
+                        "currency": currency,
+                        "price": data[coin_id].get(currency),
+                        "change_24h": data[coin_id].get(f"{currency}_24h_change"),
+                    })
+            if results:
+                self.CACHE[cache_key] = (now, results)
+            return results
+        except requests.RequestException:
             pass
         return []
 
