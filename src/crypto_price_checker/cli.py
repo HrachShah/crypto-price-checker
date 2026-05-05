@@ -36,7 +36,10 @@ class CryptoPriceChecker:
         try:
             response = self.session.get(url, params=params, timeout=10)
             response.raise_for_status()
-            data = response.json()
+            try:
+                data = response.json()
+            except ValueError as e:
+                raise requests.RequestException(f"non-JSON response: {e}")
             if coin_id in data:
                 result = {
                     "coin": coin_id,
@@ -74,7 +77,10 @@ class CryptoPriceChecker:
         try:
             response = self.session.get(url, params=params, timeout=15)
             response.raise_for_status()
-            data = response.json()
+            try:
+                data = response.json()
+            except ValueError as e:
+                raise requests.RequestException(f"non-JSON response: {e}")
             results = []
             for coin_id in coin_ids:
                 if coin_id in data:
