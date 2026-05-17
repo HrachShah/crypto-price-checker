@@ -46,7 +46,7 @@ class CryptoPriceChecker:
                     }
                     self.CACHE[cache_key] = (now, result)
                     return result
-        except (requests.RequestException, json.JSONDecodeError):
+        except (requests.RequestException, OSError, json.JSONDecodeError):
             pass
         return None
 
@@ -87,7 +87,7 @@ class CryptoPriceChecker:
                 if results:
                     self.CACHE[cache_key] = (now, results)
                 return results
-        except (requests.RequestException, json.JSONDecodeError):
+        except (requests.RequestException, OSError, json.JSONDecodeError):
             pass
         return []
 
