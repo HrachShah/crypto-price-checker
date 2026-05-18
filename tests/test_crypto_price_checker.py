@@ -18,15 +18,15 @@ class TestCryptoPriceChecker(unittest.TestCase):
     def test_cache_basic(self):
         """Cache stores and retrieves values."""
         checker = CryptoPriceChecker()
-        checker.CACHE["test:usd"] = (0, {"price": 100.0})
-        self.assertEqual(checker.CACHE["test:usd"][1]["price"], 100.0)
+        checker._cache["test:usd"] = (0, {"price": 100.0})
+        self.assertEqual(checker._cache["test:usd"][1]["price"], 100.0)
 
     def test_cache_ttl_expiry(self):
         """Cache entries expire after CACHE_TTL seconds."""
         checker = CryptoPriceChecker()
         old_time = 0
-        checker.CACHE["test:usd"] = (old_time, {"price": 100.0})
-        self.assertIn("test:usd", checker.CACHE)
+        checker._cache["test:usd"] = (old_time, {"price": 100.0})
+        self.assertIn("test:usd", checker._cache)
 
     def test_get_price_returns_none_on_error(self):
         """get_price returns None when API fails."""
@@ -66,8 +66,8 @@ class TestCryptoPriceCheckerCache(unittest.TestCase):
         """Cache keys are formatted as coin_id:currency."""
         checker = CryptoPriceChecker()
         key = "bitcoin:usd"
-        checker.CACHE[key] = (0, {"price": 50000.0})
-        self.assertIn(key, checker.CACHE)
+        checker._cache[key] = (0, {"price": 50000.0})
+        self.assertIn(key, checker._cache)
 
     def test_cache_rejects_expired_entries(self):
         """Expired cache entries are not returned."""
@@ -75,7 +75,7 @@ class TestCryptoPriceCheckerCache(unittest.TestCase):
         import time
         now = time.time()
         old_time = now - checker.CACHE_TTL - 1
-        checker.CACHE["bitcoin:usd"] = (old_time, {"price": 50000.0})
+        checker._cache["bitcoin:usd"] = (old_time, {"price": 50000.0})
         result = checker.get_price("bitcoin", "usd")
         self.assertIsNotNone(result)
         self.assertNotEqual(result.get("price"), 50000.0)
