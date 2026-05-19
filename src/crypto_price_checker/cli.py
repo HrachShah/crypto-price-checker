@@ -13,10 +13,10 @@ class CryptoPriceChecker:
     """Check cryptocurrency prices via CoinGecko API."""
 
     BASE_URL = "https://api.coingecko.com/api/v3"
-    CACHE = {}
     CACHE_TTL = 60  # seconds
 
     def __init__(self):
+        self._cache: dict[str, tuple[float, Any]] = {}
         self.session = requests.Session()
         self.session.headers["Accept"] = "application/json"
 
@@ -25,8 +25,8 @@ class CryptoPriceChecker:
         cache_key = f"{coin_id}:{currency}"
         now = time.time()
 
-        if cache_key in self.CACHE:
-            cached_time, cached_data = self.CACHE[cache_key]
+        if cache_key in self._cache:
+            cached_time, cached_data = self._cache[cache_key]
             if now - cached_time < self.CACHE_TTL:
                 return cached_data
 
@@ -44,7 +44,7 @@ class CryptoPriceChecker:
                         "price": data[coin_id].get(currency),
                         "change_24h": data[coin_id].get(f"{currency}_24h_change"),
                     }
-                    self.CACHE[cache_key] = (now, result)
+                    self._cache[cache_key] = (now, result)
                     return result
         except (requests.RequestException, OSError, json.JSONDecodeError):
             pass
@@ -60,8 +60,8 @@ class CryptoPriceChecker:
         cache_key = f"{','.join(cache_key_parts)}:{currency}"
         now = time.time()
 
-        if cache_key in self.CACHE:
-            cached_time, cached_data = self.CACHE[cache_key]
+        if cache_key in self._cache:
+            cached_time, cached_data = self._cache[cache_key]
             if now - cached_time < self.CACHE_TTL:
                 return cached_data
 
@@ -85,7 +85,7 @@ class CryptoPriceChecker:
                             "change_24h": data[coin_id].get(f"{currency}_24h_change"),
                         })
                 if results:
-                    self.CACHE[cache_key] = (now, results)
+                    self._cache[cache_key] = (now, results)
                 return results
         except (requests.RequestException, OSError, json.JSONDecodeError):
             pass
