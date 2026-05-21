@@ -20,6 +20,27 @@ class CryptoPriceChecker:
         self.session = requests.Session()
         self.session.headers["Accept"] = "application/json"
 
+    def _request_with_backoff(self, url: str, params: dict, timeout: int) -> requests.Response | None:
+        """Make an HTTP request with exponential backoff retry on rate-limit errors."""
+        retries = 3
+        delay = 1.0
+        last_exc: Exception | None = None
+        for attempt in range(retries):
+            try:
+                response = self.session.get(url, params=params, timeout=timeout)
+                if response.status_code == 429:
+                    last_exc = None
+                    time.sleep(delay)
+                    delay *= 2
+                    continue
+                return response
+            except requests.RequestException as exc:
+                last_exc = exc
+                if attempt < retries - 1:
+                    time.sleep(delay)
+                    delay *= 2
+        return None
+
     def get_price(self, coin_id: str, currency: str = "usd") -> dict[str, Any] | None:
         """Get current price for a coin."""
         cache_key = f"{coin_id}:{currency}"
@@ -34,8 +55,8 @@ class CryptoPriceChecker:
         params = {"ids": coin_id, "vs_currencies": currency, "include_24hr_change": "true"}
 
         try:
-            response = self.session.get(url, params=params, timeout=10)
-            if response.status_code == 200:
+            response = self._request_with_backoff(url, params, timeout=10)
+            if response is not None and response.status_code == 200:
                 data = response.json()
                 if coin_id in data:
                     result = {
@@ -72,8 +93,8 @@ class CryptoPriceChecker:
         }
 
         try:
-            response = self.session.get(url, params=params, timeout=15)
-            if response.status_code == 200:
+            response = self._request_with_backoff(url, params, timeout=15)
+            if response is not None and response.status_code == 200:
                 data = response.json()
                 results = []
                 for coin_id in coin_ids:
