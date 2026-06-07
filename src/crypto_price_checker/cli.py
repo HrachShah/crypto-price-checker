@@ -35,19 +35,30 @@ class CryptoPriceChecker:
 
         try:
             response = self.session.get(url, params=params, timeout=10)
-            if response.status_code == 200:
-                data = response.json()
-                if coin_id in data:
-                    result = {
-                        "coin": coin_id,
-                        "currency": currency,
-                        "price": data[coin_id].get(currency),
-                        "change_24h": data[coin_id].get(f"{currency}_24h_change"),
-                    }
-                    self.CACHE[cache_key] = (now, result)
-                    return result
         except requests.RequestException:
-            pass
+            return None
+
+        if response.status_code == 200:
+            try:
+                data = response.json()
+            except (ValueError, json.JSONDecodeError):
+                return None
+            if coin_id in data:
+                result = {
+                    "coin": coin_id,
+                    "currency": currency,
+                    "price": data[coin_id].get(currency),
+                    "change_24h": data[coin_id].get(f"{currency}_24h_change"),
+                }
+                self.CACHE[cache_key] = (now, result)
+                return result
+        if response.status_code == 429:
+            retry_after = response.headers.get("Retry-After")
+            try:
+                wait = float(retry_after) if retry_after is not None else 60.0
+            except (TypeError, ValueError):
+                wait = 60.0
+            time.sleep(min(wait, 60.0))
         return None
 
     def get_prices(self, coin_ids: list[str], currency: str = "usd") -> list[dict[str, Any]]:
