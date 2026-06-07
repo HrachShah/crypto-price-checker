@@ -2,6 +2,7 @@
 
 import json
 import sys
+import threading
 import time
 from typing import Any
 
@@ -13,8 +14,9 @@ class CryptoPriceChecker:
     """Check cryptocurrency prices via CoinGecko API."""
 
     BASE_URL = "https://api.coingecko.com/api/v3"
-    CACHE = {}
+    CACHE: dict[str, tuple[float, Any]] = {}
     CACHE_TTL = 60  # seconds
+    _CACHE_LOCK = threading.Lock()
 
     def __init__(self):
         self.session = requests.Session()
@@ -25,10 +27,12 @@ class CryptoPriceChecker:
         cache_key = f"{coin_id}:{currency}"
         now = time.time()
 
-        if cache_key in self.CACHE:
-            cached_time, cached_data = self.CACHE[cache_key]
-            if now - cached_time < self.CACHE_TTL:
-                return cached_data
+        with self._CACHE_LOCK:
+            cached = self.CACHE.get(cache_key)
+            if cached is not None:
+                cached_time, cached_data = cached
+                if now - cached_time < self.CACHE_TTL:
+                    return cached_data
 
         url = f"{self.BASE_URL}/simple/price"
         params = {"ids": coin_id, "vs_currencies": currency, "include_24hr_change": "true"}
@@ -44,7 +48,8 @@ class CryptoPriceChecker:
                         "price": data[coin_id].get(currency),
                         "change_24h": data[coin_id].get(f"{currency}_24h_change"),
                     }
-                    self.CACHE[cache_key] = (now, result)
+                    with self._CACHE_LOCK:
+                        self.CACHE[cache_key] = (now, result)
                     return result
         except requests.RequestException:
             pass
@@ -54,17 +59,21 @@ class CryptoPriceChecker:
         """Get prices for multiple coins in a single API call."""
         if not coin_ids:
             return []
-        
-        url = f"{self.BASE_URL}/simple/price"
-        cache_key_parts = sorted(set(coin_ids))  # dedupe for consistent cache key
+
+        # Preserve caller's ordering for the returned list while using a
+        # stable, deduplicated key for cache lookup.
+        cache_key_parts = sorted(set(coin_ids))
         cache_key = f"{','.join(cache_key_parts)}:{currency}"
         now = time.time()
 
-        if cache_key in self.CACHE:
-            cached_time, cached_data = self.CACHE[cache_key]
-            if now - cached_time < self.CACHE_TTL:
-                return cached_data
+        with self._CACHE_LOCK:
+            cached = self.CACHE.get(cache_key)
+            if cached is not None:
+                cached_time, cached_data = cached
+                if now - cached_time < self.CACHE_TTL:
+                    return cached_data
 
+        url = f"{self.BASE_URL}/simple/price"
         params = {
             "ids": ",".join(coin_ids),
             "vs_currencies": currency,
@@ -85,7 +94,8 @@ class CryptoPriceChecker:
                             "change_24h": data[coin_id].get(f"{currency}_24h_change"),
                         })
                 if results:
-                    self.CACHE[cache_key] = (now, results)
+                    with self._CACHE_LOCK:
+                        self.CACHE[cache_key] = (now, results)
                 return results
         except requests.RequestException:
             pass
