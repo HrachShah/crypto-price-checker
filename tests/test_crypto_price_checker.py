@@ -1,9 +1,12 @@
 """Tests for Crypto Price Checker."""
 
+import math
 import unittest
 from unittest.mock import MagicMock, patch
+import requests
+from click.testing import CliRunner
 
-from crypto_price_checker.cli import CryptoPriceChecker
+from crypto_price_checker.cli import CryptoPriceChecker, _is_finite, main
 
 
 class TestCryptoPriceChecker(unittest.TestCase):
@@ -79,6 +82,93 @@ class TestCryptoPriceCheckerCache(unittest.TestCase):
         result = checker.get_price("bitcoin", "usd")
         self.assertIsNotNone(result)
         self.assertNotEqual(result.get("price"), 50000.0)
+
+
+class TestIsFinite(unittest.TestCase):
+    """Tests for the _is_finite helper used by the CLI to validate change_24h."""
+
+    def test_returns_true_for_int(self):
+        self.assertTrue(_is_finite(0))
+        self.assertTrue(_is_finite(42))
+        self.assertTrue(_is_finite(-7))
+
+    def test_returns_true_for_finite_float(self):
+        self.assertTrue(_is_finite(0.0))
+        self.assertTrue(_is_finite(3.14))
+        self.assertTrue(_is_finite(-2.5))
+
+    def test_returns_false_for_none(self):
+        self.assertFalse(_is_finite(None))
+
+    def test_returns_false_for_string(self):
+        # CoinGecko occasionally returns "1.5" instead of 1.5; f-string
+        # format spec crashes on this, so _is_finite must reject it.
+        self.assertFalse(_is_finite("1.5"))
+        self.assertFalse(_is_finite(""))
+
+    def test_returns_false_for_nan(self):
+        self.assertFalse(_is_finite(float("nan")))
+
+    def test_returns_false_for_inf(self):
+        self.assertFalse(_is_finite(float("inf")))
+        self.assertFalse(_is_finite(float("-inf")))
+
+    def test_returns_false_for_bool(self):
+        # bool is a subclass of int, but logically not a numeric change_24h.
+        self.assertFalse(_is_finite(True))
+        self.assertFalse(_is_finite(False))
+
+    def test_returns_false_for_other_types(self):
+        self.assertFalse(_is_finite([]))
+        self.assertFalse(_is_finite({}))
+        self.assertFalse(_is_finite(object()))
+
+
+class TestCliChangeFormatting(unittest.TestCase):
+    """The CLI must not crash when change_24h is a string or non-finite."""
+
+    def _run(self, change_24h):
+        from click.testing import CliRunner
+        with patch.object(
+            CryptoPriceChecker, "get_prices",
+            return_value=[{
+                "coin": "btc",
+                "currency": "usd",
+                "price": 67890.12345,
+                "change_24h": change_24h,
+            }],
+        ):
+            return CliRunner().invoke(main, ["btc"])
+
+    def test_stringified_change_renders_as_na(self):
+        # CoinGecko sometimes returns the 24h change as "1.5" rather than 1.5;
+        # the previous code crashed with ValueError: Unknown format code 'f'
+        # for object of type 'str' on this input.
+        r = self._run("1.5")
+        self.assertEqual(r.exit_code, 0, msg=r.output)
+        self.assertIn("BTC:", r.output)
+        self.assertIn("N/A", r.output)
+        self.assertNotIn("+1.50", r.output)
+
+    def test_none_change_renders_as_na(self):
+        r = self._run(None)
+        self.assertEqual(r.exit_code, 0, msg=r.output)
+        self.assertIn("N/A", r.output)
+
+    def test_nan_change_renders_as_na(self):
+        r = self._run(float("nan"))
+        self.assertEqual(r.exit_code, 0, msg=r.output)
+        self.assertIn("N/A", r.output)
+
+    def test_inf_change_renders_as_na(self):
+        r = self._run(float("inf"))
+        self.assertEqual(r.exit_code, 0, msg=r.output)
+        self.assertIn("N/A", r.output)
+
+    def test_normal_float_change_still_formats(self):
+        r = self._run(1.5)
+        self.assertEqual(r.exit_code, 0, msg=r.output)
+        self.assertIn("+1.50%", r.output)
 
 
 if __name__ == "__main__":
