@@ -1,12 +1,24 @@
 """CLI for crypto price checker."""
 
 import json
+import math
 import sys
 import time
 from typing import Any
 
 import click
 import requests
+
+
+def _is_finite(value: Any) -> bool:
+    """Return True for int and finite float; False for None, str, bool, NaN, Inf."""
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        return True
+    if isinstance(value, float):
+        return math.isfinite(value)
+    return False
 
 
 class CryptoPriceChecker:
@@ -112,6 +124,12 @@ def main(coins: tuple[str, ...], currency: str) -> None:
     for r in results:
         price = r["price"]
         change = r["change_24h"]
+        # CoinGecko sometimes returns the 24h change as a string ("1.5")
+        # rather than a float, or wraps a non-finite value. Normalize to
+        # None so the existing f-string and "N/A" fallback render sensibly
+        # instead of crashing on a string format spec.
+        if not _is_finite(change):
+            change = None
         change_str = f"{change:+.2f}%" if change is not None else "N/A"
         symbol = r["coin"].upper()
         if price is None:
