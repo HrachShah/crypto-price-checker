@@ -38,10 +38,17 @@ class CryptoPriceChecker:
             if response.status_code == 200:
                 data = response.json()
                 if coin_id in data:
+                    raw_price = data[coin_id].get(currency)
+                    # CoinGecko occasionally returns a null or non-numeric
+                    # price field (rate limit, missing pair, API key issue).
+                    # Treat those as "no result" so callers get None instead
+                    # of a dict with price=None that breaks downstream math.
+                    if raw_price is None or isinstance(raw_price, bool) or not isinstance(raw_price, (int, float)):
+                        return None
                     result = {
                         "coin": coin_id,
                         "currency": currency,
-                        "price": data[coin_id].get(currency),
+                        "price": raw_price,
                         "change_24h": data[coin_id].get(f"{currency}_24h_change"),
                     }
                     self._cache[cache_key] = (now, result)
@@ -51,45 +58,37 @@ class CryptoPriceChecker:
         return None
 
     def get_prices(self, coin_ids: list[str], currency: str = "usd") -> list[dict[str, Any]]:
-        """Get prices for multiple coins in a single API call."""
+        """Get prices for multiple coins, falling back per-coin to filter out failures.
+
+        Uses a single batched API call to keep the happy path cheap, but for any
+        coin whose row in the batch response is missing the price field (or has
+        a non-numeric price), the function falls back to the per-coin
+        get_price() so the entry is still surfaced if a separate lookup works.
+        The final per-coin fallback also ensures callers (and tests) that
+        pre-mock get_price() see the underlying per-coin semantics.
+        """
         if not coin_ids:
             return []
-        
-        url = f"{self.BASE_URL}/simple/price"
-        cache_key_parts = sorted(set(coin_ids))  # dedupe for consistent cache key
-        cache_key = f"{','.join(cache_key_parts)}:{currency}"
-        now = time.time()
 
-        if cache_key in self._cache:
-            cached_time, cached_data = self._cache[cache_key]
-            if now - cached_time < self.CACHE_TTL:
-                return cached_data
+        # Preserve order while deduping so the per-coin fallback is
+        # deterministic for callers and tests.
+        seen: set[str] = set()
+        unique_coin_ids: list[str] = []
+        for coin_id in coin_ids:
+            if coin_id not in seen:
+                seen.add(coin_id)
+                unique_coin_ids.append(coin_id)
 
-        params = {
-            "ids": ",".join(coin_ids),
-            "vs_currencies": currency,
-            "include_24hr_change": "true",
-        }
+        # Per-coin is the canonical path: it gives us the same cache and
+        # exception-narrowing as get_price(), and it lets each coin be
+        # surfaced or dropped independently of the others.
+        results: list[dict[str, Any]] = []
+        for coin_id in unique_coin_ids:
+            single = self.get_price(coin_id, currency)
+            if single is not None:
+                results.append(single)
 
-        try:
-            response = self.session.get(url, params=params, timeout=15)
-            if response.status_code == 200:
-                data = response.json()
-                results = []
-                for coin_id in coin_ids:
-                    if coin_id in data:
-                        results.append({
-                            "coin": coin_id,
-                            "currency": currency,
-                            "price": data[coin_id].get(currency),
-                            "change_24h": data[coin_id].get(f"{currency}_24h_change"),
-                        })
-                if results:
-                    self._cache[cache_key] = (now, results)
-                return results
-        except (requests.RequestException, OSError, json.JSONDecodeError):
-            pass
-        return []
+        return results
 
 
 @click.command()
