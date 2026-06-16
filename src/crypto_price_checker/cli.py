@@ -36,7 +36,14 @@ class CryptoPriceChecker:
         try:
             response = self.session.get(url, params=params, timeout=10)
             if response.status_code == 200:
-                data = response.json()
+                try:
+                    data = response.json()
+                except ValueError:
+                    # CoinGecko sometimes returns a 200 with an HTML body
+                    # (e.g. an interstitial page from a CDN or load balancer
+                    # during a partial outage). Treat it as a transient
+                    # failure rather than letting JSONDecodeError escape.
+                    return None
                 if coin_id in data:
                     result = {
                         "coin": coin_id,
@@ -46,7 +53,7 @@ class CryptoPriceChecker:
                     }
                     self.CACHE[cache_key] = (now, result)
                     return result
-        except requests.RequestException:
+        except (requests.RequestException, ValueError):
             pass
         return None
 
@@ -74,7 +81,10 @@ class CryptoPriceChecker:
         try:
             response = self.session.get(url, params=params, timeout=15)
             if response.status_code == 200:
-                data = response.json()
+                try:
+                    data = response.json()
+                except ValueError:
+                    return []
                 results = []
                 for coin_id in coin_ids:
                     if coin_id in data:

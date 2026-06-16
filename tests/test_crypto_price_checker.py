@@ -36,6 +36,17 @@ class TestCryptoPriceChecker(unittest.TestCase):
             result = checker.get_price("bitcoin", "usd")
             self.assertIsNone(result)
 
+    def test_get_price_returns_none_on_html_body(self):
+        """get_price returns None when the API returns 200 with a non-JSON body."""
+        checker = CryptoPriceChecker()
+        with patch.object(checker.session, "get") as mock_get:
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.side_effect = ValueError("not json")
+            mock_get.return_value = mock_response
+            result = checker.get_price("bitcoin", "usd")
+            self.assertIsNone(result)
+
     def test_get_prices_filters_none(self):
         """get_prices filters out failed price lookups."""
         checker = CryptoPriceChecker()
@@ -57,6 +68,17 @@ class TestCryptoPriceChecker(unittest.TestCase):
             self.assertEqual(len(results), 2)
             self.assertEqual(results[0]["coin"], "bitcoin")
             self.assertEqual(results[1]["coin"], "ethereum")
+
+    def test_get_prices_returns_empty_on_html_body(self):
+        """get_prices returns [] when the API returns 200 with a non-JSON body."""
+        checker = CryptoPriceChecker()
+        with patch.object(checker.session, "get") as mock_get:
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.side_effect = ValueError("not json")
+            mock_get.return_value = mock_response
+            results = checker.get_prices(["bitcoin", "ethereum"], "usd")
+            self.assertEqual(results, [])
 
 
 class TestCryptoPriceCheckerCache(unittest.TestCase):
