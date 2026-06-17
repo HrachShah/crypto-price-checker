@@ -1,6 +1,5 @@
 """CLI for crypto price checker."""
 
-import json
 import sys
 import time
 from typing import Any
@@ -26,7 +25,18 @@ class CryptoPriceChecker:
         self.cache: dict[str, tuple[float, dict[str, Any] | list[dict[str, Any]]]] = {}
 
     def get_price(self, coin_id: str, currency: str = "usd") -> dict[str, Any] | None:
-        """Get current price for a coin."""
+        """Get current price for a coin.
+
+        Returns None if the coin was unknown to CoinGecko (the API returns
+        200 with an empty body for unknown ids). Raises requests.HTTPError
+        for any non-2xx response so the caller can distinguish "the API
+        said no" (HTTP 4xx, e.g. rate limited at 429 or bad coin id at
+        404) from "the network is down" (a connection / timeout error).
+        Previously both cases returned None silently and the CLI printed
+        the same generic "Could not fetch prices" message, which left
+        users unable to tell whether they had a bad coin id or were
+        hitting CoinGecko's free-tier rate limit.
+        """
         cache_key = f"{coin_id}:{currency}"
         now = time.time()
 
@@ -40,26 +50,32 @@ class CryptoPriceChecker:
 
         try:
             response = self.session.get(url, params=params, timeout=10)
-            if response.status_code == 200:
-                data = response.json()
-                if coin_id in data:
-                    result = {
-                        "coin": coin_id,
-                        "currency": currency,
-                        "price": data[coin_id].get(currency),
-                        "change_24h": data[coin_id].get(f"{currency}_24h_change"),
-                    }
-                    self.cache[cache_key] = (now, result)
-                    return result
+            response.raise_for_status()
+            data = response.json()
         except requests.RequestException:
-            pass
+            raise
+
+        if coin_id in data:
+            result = {
+                "coin": coin_id,
+                "currency": currency,
+                "price": data[coin_id].get(currency),
+                "change_24h": data[coin_id].get(f"{currency}_24h_change"),
+            }
+            self.cache[cache_key] = (now, result)
+            return result
         return None
 
     def get_prices(self, coin_ids: list[str], currency: str = "usd") -> list[dict[str, Any]]:
-        """Get prices for multiple coins in a single API call."""
+        """Get prices for multiple coins in a single API call.
+
+        See get_price for the HTTP-error contract: a 4xx/5xx response
+        raises requests.HTTPError so the CLI can show an actionable
+        message instead of the previous generic failure.
+        """
         if not coin_ids:
             return []
-        
+
         url = f"{self.BASE_URL}/simple/price"
         cache_key_parts = sorted(set(coin_ids))  # dedupe for consistent cache key
         cache_key = f"{','.join(cache_key_parts)}:{currency}"
@@ -78,23 +94,23 @@ class CryptoPriceChecker:
 
         try:
             response = self.session.get(url, params=params, timeout=15)
-            if response.status_code == 200:
-                data = response.json()
-                results = []
-                for coin_id in coin_ids:
-                    if coin_id in data:
-                        results.append({
-                            "coin": coin_id,
-                            "currency": currency,
-                            "price": data[coin_id].get(currency),
-                            "change_24h": data[coin_id].get(f"{currency}_24h_change"),
-                        })
-                if results:
-                    self.cache[cache_key] = (now, results)
-                return results
+            response.raise_for_status()
+            data = response.json()
         except requests.RequestException:
-            pass
-        return []
+            raise
+
+        results = []
+        for coin_id in coin_ids:
+            if coin_id in data:
+                results.append({
+                    "coin": coin_id,
+                    "currency": currency,
+                    "price": data[coin_id].get(currency),
+                    "change_24h": data[coin_id].get(f"{currency}_24h_change"),
+                })
+        if results:
+            self.cache[cache_key] = (now, results)
+        return results
 
 
 @click.command()
@@ -108,10 +124,31 @@ def main(coins: tuple[str, ...], currency: str) -> None:
         sys.exit(1)
 
     checker = CryptoPriceChecker()
-    results = checker.get_prices(list(coins), currency)
+    try:
+        results = checker.get_prices(list(coins), currency)
+    except requests.HTTPError as e:
+        status = e.response.status_code if e.response is not None else 0
+        if status == 429:
+            click.echo(
+                "CoinGecko rate limit reached (HTTP 429). "
+                "Wait a minute and try again, or check the free-tier quota."
+            )
+        elif status == 404:
+            click.echo("CoinGecko API endpoint not found (HTTP 404).")
+        elif 500 <= status < 600:
+            click.echo(f"CoinGecko is having an outage (HTTP {status}). Try again later.")
+        else:
+            click.echo(f"CoinGecko returned HTTP {status}: {e}")
+        sys.exit(1)
+    except requests.RequestException as e:
+        click.echo(f"Network error talking to CoinGecko: {e}")
+        sys.exit(1)
 
     if not results:
-        click.echo("Could not fetch prices. Check coin IDs and try again.")
+        click.echo(
+            "No prices returned. Check that the coin ids are valid "
+            "(e.g. 'bitcoin', 'ethereum')."
+        )
         sys.exit(1)
 
     for r in results:
