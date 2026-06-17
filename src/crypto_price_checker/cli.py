@@ -13,20 +13,25 @@ class CryptoPriceChecker:
     """Check cryptocurrency prices via CoinGecko API."""
 
     BASE_URL = "https://api.coingecko.com/api/v3"
-    CACHE = {}
     CACHE_TTL = 60  # seconds
 
     def __init__(self):
         self.session = requests.Session()
         self.session.headers["Accept"] = "application/json"
+        # Per-instance cache: a class-level dict would be shared across all
+        # CryptoPriceChecker instances in the same process, but each CLI
+        # invocation is a fresh process so the class-level cache is always
+        # empty when get_price is called and never serves a hit. A per-
+        # instance dict also lets callers (e.g. tests) use isolated caches.
+        self.cache: dict[str, tuple[float, dict[str, Any] | list[dict[str, Any]]]] = {}
 
     def get_price(self, coin_id: str, currency: str = "usd") -> dict[str, Any] | None:
         """Get current price for a coin."""
         cache_key = f"{coin_id}:{currency}"
         now = time.time()
 
-        if cache_key in self.CACHE:
-            cached_time, cached_data = self.CACHE[cache_key]
+        if cache_key in self.cache:
+            cached_time, cached_data = self.cache[cache_key]
             if now - cached_time < self.CACHE_TTL:
                 return cached_data
 
@@ -44,7 +49,7 @@ class CryptoPriceChecker:
                         "price": data[coin_id].get(currency),
                         "change_24h": data[coin_id].get(f"{currency}_24h_change"),
                     }
-                    self.CACHE[cache_key] = (now, result)
+                    self.cache[cache_key] = (now, result)
                     return result
         except requests.RequestException:
             pass
@@ -60,8 +65,8 @@ class CryptoPriceChecker:
         cache_key = f"{','.join(cache_key_parts)}:{currency}"
         now = time.time()
 
-        if cache_key in self.CACHE:
-            cached_time, cached_data = self.CACHE[cache_key]
+        if cache_key in self.cache:
+            cached_time, cached_data = self.cache[cache_key]
             if now - cached_time < self.CACHE_TTL:
                 return cached_data
 
@@ -85,7 +90,7 @@ class CryptoPriceChecker:
                             "change_24h": data[coin_id].get(f"{currency}_24h_change"),
                         })
                 if results:
-                    self.CACHE[cache_key] = (now, results)
+                    self.cache[cache_key] = (now, results)
                 return results
         except requests.RequestException:
             pass
