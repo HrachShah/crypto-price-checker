@@ -3,6 +3,8 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
+import requests
+
 from crypto_price_checker.cli import CryptoPriceChecker
 
 
@@ -32,17 +34,33 @@ class TestCryptoPriceChecker(unittest.TestCase):
         """get_price returns None when API fails."""
         checker = CryptoPriceChecker()
         with patch.object(checker.session, "get") as mock_get:
-            mock_get.side_effect = Exception("Network error")
+            # The production handler only catches requests.RequestException, so
+            # the side effect has to be a RequestException subclass — a bare
+            # Exception would propagate past the except block and the test
+            # would observe the raise, not the None return it expects.
+            mock_get.side_effect = requests.ConnectionError("Network error")
             result = checker.get_price("bitcoin", "usd")
             self.assertIsNone(result)
 
     def test_get_prices_filters_none(self):
-        """get_prices filters out failed price lookups."""
+        """get_prices filters out coin ids the API didn't return."""
         checker = CryptoPriceChecker()
-        with patch.object(checker, "get_price") as mock_get_price:
-            mock_get_price.return_value = None
+        with patch.object(checker.session, "get") as mock_get:
+            # get_prices hits session.get directly — it does not route through
+            # get_price — so the test has to mock at the HTTP boundary, not
+            # the per-coin method. Return a payload that only mentions
+            # bitcoin; the "invalid-coin" id should be skipped by the
+            # `if coin_id in data` guard inside the loop.
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {
+                "bitcoin": {"usd": 50000.0, "usd_24h_change": 2.5}
+            }
+            mock_get.return_value = mock_response
             results = checker.get_prices(["bitcoin", "invalid-coin"], "usd")
-            self.assertEqual(results, [])
+            self.assertEqual(len(results), 1)
+            self.assertEqual(results[0]["coin"], "bitcoin")
+            self.assertEqual(results[0]["price"], 50000.0)
 
     def test_get_prices_returns_valid_results(self):
         """get_prices returns only successful price lookups."""
