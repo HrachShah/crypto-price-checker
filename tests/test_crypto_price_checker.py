@@ -1,9 +1,33 @@
-"""Tests for Crypto Price Checker."""
+"""Tests for Crypto Price Checker.
+
+These tests follow the current implementation contract:
+- cache is per-instance
+- get_price/get_prices raise on HTTP errors
+- get_prices batches coin IDs into one API request
+"""
+
+from __future__ import annotations
 
 import unittest
 from unittest.mock import MagicMock, patch
 
+import pytest
+import requests
+
 from crypto_price_checker.cli import CryptoPriceChecker
+
+
+def _mock_response(status_code: int, json_data=None):
+    resp = MagicMock(spec=requests.Response)
+    resp.status_code = status_code
+    resp.json.return_value = json_data if json_data is not None else {}
+    if status_code >= 400:
+        err = requests.HTTPError(f"{status_code} HTTP Error")
+        err.response = resp
+        resp.raise_for_status.side_effect = err
+    else:
+        resp.raise_for_status.return_value = None
+    return resp
 
 
 class TestCryptoPriceChecker(unittest.TestCase):
@@ -14,6 +38,8 @@ class TestCryptoPriceChecker(unittest.TestCase):
         checker = CryptoPriceChecker()
         self.assertEqual(checker.BASE_URL, "https://api.coingecko.com/api/v3")
         self.assertEqual(checker.CACHE_TTL, 60)
+        self.assertIsInstance(checker.cache, dict)
+        self.assertEqual(checker.cache, {})
 
     def test_cache_basic(self):
         """Cache stores and retrieves values."""
@@ -28,35 +54,54 @@ class TestCryptoPriceChecker(unittest.TestCase):
         checker.cache["test:usd"] = (old_time, {"price": 100.0})
         self.assertIn("test:usd", checker.cache)
 
-    def test_get_price_returns_none_on_error(self):
-        """get_price returns None when API fails."""
+    def test_get_price_raises_on_network_error(self):
+        """get_price propagates network errors."""
         checker = CryptoPriceChecker()
-        with patch.object(checker.session, "get") as mock_get:
-            mock_get.side_effect = Exception("Network error")
-            result = checker.get_price("bitcoin", "usd")
-            self.assertIsNone(result)
+        with patch.object(checker.session, "get", side_effect=requests.ConnectionError("dns")):
+            with self.assertRaises(requests.RequestException):
+                checker.get_price("bitcoin", "usd")
 
-    def test_get_prices_filters_none(self):
-        """get_prices filters out failed price lookups."""
+    def test_get_price_returns_none_when_api_has_no_data(self):
+        """get_price still returns None when CoinGecko has no data for a coin id."""
         checker = CryptoPriceChecker()
-        with patch.object(checker, "get_price") as mock_get_price:
-            mock_get_price.return_value = None
+        with patch.object(checker.session, "get", return_value=_mock_response(200, {})):
+            self.assertIsNone(checker.get_price("not-a-coin", "usd"))
+
+    def test_get_prices_empty_input_returns_empty(self):
+        """get_prices short-circuits on empty input."""
+        checker = CryptoPriceChecker()
+        self.assertEqual(checker.get_prices([], "usd"), [])
+
+    def test_get_prices_filters_unknown_coins(self):
+        """get_prices filters out coins missing from the CoinGecko payload."""
+        checker = CryptoPriceChecker()
+        payload = {
+            "bitcoin": {"usd": 50000.0, "usd_24h_change": 2.5},
+        }
+        with patch.object(checker.session, "get", return_value=_mock_response(200, payload)):
             results = checker.get_prices(["bitcoin", "invalid-coin"], "usd")
-            self.assertEqual(results, [])
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["coin"], "bitcoin")
+
+    def test_get_prices_raises_on_http_error(self):
+        """get_prices propagates upstream HTTP errors."""
+        checker = CryptoPriceChecker()
+        with patch.object(checker.session, "get", return_value=_mock_response(429)):
+            with self.assertRaises(requests.HTTPError):
+                checker.get_prices(["bitcoin"], "usd")
 
     def test_get_prices_returns_valid_results(self):
         """get_prices returns only successful price lookups."""
         checker = CryptoPriceChecker()
-        with patch.object(checker, "get_price") as mock_get_price:
-            mock_get_price.side_effect = [
-                {"coin": "bitcoin", "currency": "usd", "price": 50000.0, "change_24h": 2.5},
-                None,
-                {"coin": "ethereum", "currency": "usd", "price": 3000.0, "change_24h": -1.2},
-            ]
+        payload = {
+            "bitcoin": {"usd": 50000.0, "usd_24h_change": 2.5},
+            "ethereum": {"usd": 3000.0, "usd_24h_change": -1.2},
+        }
+        with patch.object(checker.session, "get", return_value=_mock_response(200, payload)):
             results = checker.get_prices(["bitcoin", "invalid", "ethereum"], "usd")
-            self.assertEqual(len(results), 2)
-            self.assertEqual(results[0]["coin"], "bitcoin")
-            self.assertEqual(results[1]["coin"], "ethereum")
+        self.assertEqual(len(results), 2)
+        self.assertEqual(results[0]["coin"], "bitcoin")
+        self.assertEqual(results[1]["coin"], "ethereum")
 
 
 class TestCryptoPriceCheckerCache(unittest.TestCase):
@@ -73,10 +118,12 @@ class TestCryptoPriceCheckerCache(unittest.TestCase):
         """Expired cache entries are not returned."""
         checker = CryptoPriceChecker()
         import time
+
         now = time.time()
         old_time = now - checker.CACHE_TTL - 1
         checker.cache["bitcoin:usd"] = (old_time, {"price": 50000.0})
-        result = checker.get_price("bitcoin", "usd")
+        with patch.object(checker.session, "get", return_value=_mock_response(200, {"bitcoin": {"usd": 49000.0, "usd_24h_change": 1.0}})):
+            result = checker.get_price("bitcoin", "usd")
         self.assertIsNotNone(result)
         self.assertNotEqual(result.get("price"), 50000.0)
 
