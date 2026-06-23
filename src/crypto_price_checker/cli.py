@@ -54,10 +54,18 @@ class CryptoPriceChecker:
         """Get prices for multiple coins in a single API call."""
         if not coin_ids:
             return []
-        
+
+        # Preserve caller-supplied order, but dedupe before hitting the API:
+        # CoinGecko's /simple/price treats repeated ids as a single lookup, so
+        # passing ["bitcoin", "bitcoin", "bitcoin"] would do one round trip and
+        # return one entry — but the old result loop iterated the raw input,
+        # producing three identical rows. Dedupe here so each coin appears at
+        # most once in the output, in the order it was first requested.
+        seen: set[str] = set()
+        unique_coin_ids: list[str] = [c for c in coin_ids if not (c in seen or seen.add(c))]
+
         url = f"{self.BASE_URL}/simple/price"
-        cache_key_parts = sorted(set(coin_ids))  # dedupe for consistent cache key
-        cache_key = f"{','.join(cache_key_parts)}:{currency}"
+        cache_key = f"{','.join(unique_coin_ids)}:{currency}"
         now = time.time()
 
         if cache_key in self.CACHE:
@@ -66,7 +74,7 @@ class CryptoPriceChecker:
                 return cached_data
 
         params = {
-            "ids": ",".join(coin_ids),
+            "ids": ",".join(unique_coin_ids),
             "vs_currencies": currency,
             "include_24hr_change": "true",
         }
@@ -76,7 +84,7 @@ class CryptoPriceChecker:
             if response.status_code == 200:
                 data = response.json()
                 results = []
-                for coin_id in coin_ids:
+                for coin_id in unique_coin_ids:
                     if coin_id in data:
                         results.append({
                             "coin": coin_id,

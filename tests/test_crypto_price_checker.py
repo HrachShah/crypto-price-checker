@@ -58,6 +58,32 @@ class TestCryptoPriceChecker(unittest.TestCase):
             self.assertEqual(results[0]["coin"], "bitcoin")
             self.assertEqual(results[1]["coin"], "ethereum")
 
+    def test_get_prices_dedupes_duplicate_coin_ids(self):
+        """Duplicate coin ids in the input must collapse to a single result row.
+
+        CoinGecko's /simple/price treats repeated ids as a single lookup, so
+        a CLI invocation like `crypto-price bitcoin bitcoin bitcoin` would do
+        one HTTP round trip and return one entry — but the previous result
+        loop iterated the raw input and emitted three identical rows in the
+        CLI output. Verify the dedupe path so each coin appears at most once,
+        in first-seen order, and the API is called with the deduped id list.
+        """
+        checker = CryptoPriceChecker()
+        with patch.object(checker.session, "get") as mock_get:
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {
+                "bitcoin": {"usd": 50000.0, "usd_24h_change": 1.5},
+                "ethereum": {"usd": 3000.0, "usd_24h_change": -2.1},
+            }
+            mock_get.return_value = mock_response
+            results = checker.get_prices(["bitcoin", "bitcoin", "ethereum", "bitcoin"], "usd")
+        self.assertEqual(len(results), 2)
+        self.assertEqual([r["coin"] for r in results], ["bitcoin", "ethereum"])
+        mock_get.assert_called_once()
+        called_params = mock_get.call_args.kwargs["params"]
+        self.assertEqual(called_params["ids"], "bitcoin,ethereum")
+
 
 class TestCryptoPriceCheckerCache(unittest.TestCase):
     """Tests for caching behavior."""
