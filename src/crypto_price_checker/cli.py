@@ -48,6 +48,7 @@ class CryptoPriceChecker:
                     return result
         except (requests.RequestException, ValueError):
             return None
+        return None
 
     def get_prices(self, coin_ids: list[str], currency: str = "usd") -> list[dict[str, Any]]:
         """Get prices for multiple coins in a single API call."""
@@ -88,6 +89,7 @@ class CryptoPriceChecker:
                 return results
         except (requests.RequestException, ValueError):
             return []
+        return []
 
 
 @click.command()
