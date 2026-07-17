@@ -13,10 +13,10 @@ class CryptoPriceChecker:
     """Check cryptocurrency prices via CoinGecko API."""
 
     BASE_URL = "https://api.coingecko.com/api/v3"
-    CACHE = {}
     CACHE_TTL = 60  # seconds
 
     def __init__(self):
+        self.CACHE: dict[str, tuple[float, Any]] = {}
         self.session = requests.Session()
         self.session.headers["Accept"] = "application/json"
 

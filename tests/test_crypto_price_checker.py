@@ -15,6 +15,13 @@ class TestCryptoPriceChecker(unittest.TestCase):
         self.assertEqual(checker.BASE_URL, "https://api.coingecko.com/api/v3")
         self.assertEqual(checker.CACHE_TTL, 60)
 
+    def test_cache_is_not_shared_between_checkers(self):
+        """One checker instance must not reuse another instance's cache."""
+        first = CryptoPriceChecker()
+        second = CryptoPriceChecker()
+        first.CACHE["bitcoin:usd"] = (0, {"price": 100.0})
+        self.assertNotIn("bitcoin:usd", second.CACHE)
+
     def test_cache_basic(self):
         """Cache stores and retrieves values."""
         checker = CryptoPriceChecker()
