@@ -35,6 +35,14 @@ class TestCryptoPriceChecker(unittest.TestCase):
         checker.CACHE["test:usd"] = (old_time, {"price": 100.0})
         self.assertIn("test:usd", checker.CACHE)
 
+    def test_get_price_returns_none_for_invalid_json(self):
+        """Malformed API responses should be treated as unavailable prices."""
+        checker = CryptoPriceChecker()
+        response = MagicMock(status_code=200)
+        response.json.side_effect = ValueError("invalid JSON")
+        with patch.object(checker.session, "get", return_value=response):
+            self.assertIsNone(checker.get_price("bitcoin", "usd"))
+
     def test_get_price_returns_none_on_error(self):
         """get_price returns None when API fails."""
         checker = CryptoPriceChecker()

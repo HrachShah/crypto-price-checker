@@ -46,9 +46,8 @@ class CryptoPriceChecker:
                     }
                     self.CACHE[cache_key] = (now, result)
                     return result
-        except requests.RequestException:
-            pass
-        return None
+        except (requests.RequestException, ValueError):
+            return None
 
     def get_prices(self, coin_ids: list[str], currency: str = "usd") -> list[dict[str, Any]]:
         """Get prices for multiple coins in a single API call."""
@@ -87,9 +86,8 @@ class CryptoPriceChecker:
                 if results:
                     self.CACHE[cache_key] = (now, results)
                 return results
-        except requests.RequestException:
-            pass
-        return []
+        except (requests.RequestException, ValueError):
+            return []
 
 
 @click.command()
