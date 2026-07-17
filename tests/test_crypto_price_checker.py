@@ -51,6 +51,14 @@ class TestCryptoPriceChecker(unittest.TestCase):
             result = checker.get_price("bitcoin", "usd")
             self.assertIsNone(result)
 
+    def test_get_price_returns_none_for_malformed_payload(self):
+        """Malformed successful responses should be treated as unavailable."""
+        checker = CryptoPriceChecker()
+        response = MagicMock(status_code=200)
+        response.json.return_value = {"bitcoin": None}
+        with patch.object(checker.session, "get", return_value=response):
+            self.assertIsNone(checker.get_price("bitcoin", "usd"))
+
     def test_get_prices_filters_none(self):
         """get_prices filters out failed price lookups."""
         checker = CryptoPriceChecker()
