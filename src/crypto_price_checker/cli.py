@@ -3,6 +3,7 @@
 import json
 import sys
 import time
+from collections.abc import Mapping
 from typing import Any
 
 import click
@@ -37,12 +38,13 @@ class CryptoPriceChecker:
             response = self.session.get(url, params=params, timeout=10)
             if response.status_code == 200:
                 data = response.json()
-                if coin_id in data:
+                coin_data = data.get(coin_id) if isinstance(data, Mapping) else None
+                if isinstance(coin_data, Mapping):
                     result = {
                         "coin": coin_id,
                         "currency": currency,
-                        "price": data[coin_id].get(currency),
-                        "change_24h": data[coin_id].get(f"{currency}_24h_change"),
+                        "price": coin_data.get(currency),
+                        "change_24h": coin_data.get(f"{currency}_24h_change"),
                     }
                     self.CACHE[cache_key] = (now, result)
                     return result
@@ -76,13 +78,16 @@ class CryptoPriceChecker:
             if response.status_code == 200:
                 data = response.json()
                 results = []
+                if not isinstance(data, Mapping):
+                    return results
                 for coin_id in coin_ids:
-                    if coin_id in data:
+                    coin_data = data.get(coin_id)
+                    if isinstance(coin_data, Mapping):
                         results.append({
                             "coin": coin_id,
                             "currency": currency,
-                            "price": data[coin_id].get(currency),
-                            "change_24h": data[coin_id].get(f"{currency}_24h_change"),
+                            "price": coin_data.get(currency),
+                            "change_24h": coin_data.get(f"{currency}_24h_change"),
                         })
                 if results:
                     self.CACHE[cache_key] = (now, results)

@@ -36,6 +36,22 @@ class TestCryptoPriceChecker(unittest.TestCase):
             result = checker.get_price("bitcoin", "usd")
             self.assertIsNone(result)
 
+    def test_get_price_ignores_malformed_coin_payload(self):
+        """get_price returns None when CoinGecko gives a non-object coin value."""
+        checker = CryptoPriceChecker()
+        response = MagicMock(status_code=200)
+        response.json.return_value = {"bitcoin": ["not", "a", "price"]}
+        with patch.object(checker.session, "get", return_value=response):
+            self.assertIsNone(checker.get_price("bitcoin", "usd"))
+
+    def test_get_prices_ignores_malformed_response_payload(self):
+        """get_prices returns no rows for a non-object API response."""
+        checker = CryptoPriceChecker()
+        response = MagicMock(status_code=200)
+        response.json.return_value = ["not", "a", "mapping"]
+        with patch.object(checker.session, "get", return_value=response):
+            self.assertEqual(checker.get_prices(["bitcoin"], "usd"), [])
+
     def test_get_prices_filters_none(self):
         """get_prices filters out failed price lookups."""
         checker = CryptoPriceChecker()
