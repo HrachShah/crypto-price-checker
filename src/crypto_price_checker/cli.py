@@ -46,12 +46,16 @@ class CryptoPriceChecker:
                     }
                     self.CACHE[cache_key] = (now, result)
                     return result
-        except (requests.RequestException, ValueError, TypeError, AttributeError):
+        except Exception:
             return None
         return None
 
     def get_prices(self, coin_ids: list[str], currency: str = "usd") -> list[dict[str, Any]]:
-        """Get prices for multiple coins in a single API call."""
+        """Get prices for multiple coins in a single API call.
+
+        Cached batches are stored using a canonical key, so a cache hit must
+        be rebuilt in the order requested by the caller.
+        """
         if not coin_ids:
             return []
         
@@ -63,7 +67,16 @@ class CryptoPriceChecker:
         if cache_key in self.CACHE:
             cached_time, cached_data = self.CACHE[cache_key]
             if now - cached_time < self.CACHE_TTL:
-                return cached_data
+                cached_by_coin = {
+                    item["coin"]: item
+                    for item in cached_data
+                    if isinstance(item, dict) and isinstance(item.get("coin"), str)
+                }
+                return [
+                    cached_by_coin[coin_id]
+                    for coin_id in coin_ids
+                    if coin_id in cached_by_coin
+                ]
 
         params = {
             "ids": ",".join(coin_ids),
@@ -89,7 +102,7 @@ class CryptoPriceChecker:
                 if results:
                     self.CACHE[cache_key] = (now, results)
                 return results
-        except (requests.RequestException, ValueError, TypeError, AttributeError):
+        except Exception:
             return []
         return []
 

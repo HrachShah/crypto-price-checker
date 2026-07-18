@@ -1,5 +1,6 @@
 """Tests for Crypto Price Checker."""
 
+import time
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -68,27 +69,40 @@ class TestCryptoPriceChecker(unittest.TestCase):
         with patch.object(checker.session, "get", return_value=response):
             self.assertEqual(checker.get_prices(["bitcoin"], "usd"), [])
 
-    def test_get_prices_filters_none(self):
-        """get_prices filters out failed price lookups."""
+    def test_get_prices_returns_empty_for_missing_coins(self):
+        """A batch response without requested coins produces no results."""
         checker = CryptoPriceChecker()
-        with patch.object(checker, "get_price") as mock_get_price:
-            mock_get_price.return_value = None
-            results = checker.get_prices(["bitcoin", "invalid-coin"], "usd")
-            self.assertEqual(results, [])
+        response = MagicMock(status_code=200)
+        response.json.return_value = {}
+        with patch.object(checker.session, "get", return_value=response):
+            self.assertEqual(checker.get_prices(["bitcoin", "invalid-coin"], "usd"), [])
 
     def test_get_prices_returns_valid_results(self):
-        """get_prices returns only successful price lookups."""
+        """get_prices returns only coins present in the API response."""
         checker = CryptoPriceChecker()
-        with patch.object(checker, "get_price") as mock_get_price:
-            mock_get_price.side_effect = [
-                {"coin": "bitcoin", "currency": "usd", "price": 50000.0, "change_24h": 2.5},
-                None,
-                {"coin": "ethereum", "currency": "usd", "price": 3000.0, "change_24h": -1.2},
-            ]
+        response = MagicMock(status_code=200)
+        response.json.return_value = {
+            "bitcoin": {"usd": 50000.0, "usd_24h_change": 2.5},
+            "ethereum": {"usd": 3000.0, "usd_24h_change": -1.2},
+        }
+        with patch.object(checker.session, "get", return_value=response):
             results = checker.get_prices(["bitcoin", "invalid", "ethereum"], "usd")
-            self.assertEqual(len(results), 2)
-            self.assertEqual(results[0]["coin"], "bitcoin")
-            self.assertEqual(results[1]["coin"], "ethereum")
+        self.assertEqual(len(results), 2)
+        self.assertEqual(results[0]["coin"], "bitcoin")
+        self.assertEqual(results[1]["coin"], "ethereum")
+
+    def test_get_prices_cache_hit_preserves_requested_order(self):
+        """A canonical batch cache key must not change display order."""
+        checker = CryptoPriceChecker()
+        checker.CACHE["bitcoin,ethereum:usd"] = (time.time(), [
+            {"coin": "bitcoin", "currency": "usd", "price": 50000.0, "change_24h": 2.5},
+            {"coin": "ethereum", "currency": "usd", "price": 3000.0, "change_24h": -1.2},
+        ])
+        with patch.object(checker.session, "get") as mock_get:
+            results = checker.get_prices(["ethereum", "bitcoin"], "usd")
+
+        self.assertEqual([result["coin"] for result in results], ["ethereum", "bitcoin"])
+        mock_get.assert_not_called()
 
 
 class TestCryptoPriceCheckerCache(unittest.TestCase):
@@ -108,9 +122,11 @@ class TestCryptoPriceCheckerCache(unittest.TestCase):
         now = time.time()
         old_time = now - checker.CACHE_TTL - 1
         checker.CACHE["bitcoin:usd"] = (old_time, {"price": 50000.0})
-        result = checker.get_price("bitcoin", "usd")
-        self.assertIsNotNone(result)
-        self.assertNotEqual(result.get("price"), 50000.0)
+        response = MagicMock(status_code=200)
+        response.json.return_value = {"bitcoin": {"usd": 51000.0}}
+        with patch.object(checker.session, "get", return_value=response):
+            result = checker.get_price("bitcoin", "usd")
+        self.assertEqual(result["price"], 51000.0)
 
 
 if __name__ == "__main__":
