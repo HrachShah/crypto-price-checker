@@ -62,6 +62,7 @@ class TestCryptoPriceChecker(unittest.TestCase):
 
     def test_get_prices_returns_empty_for_scalar_payload(self):
         """A successful scalar response cannot contain coin prices."""
+        checker = CryptoPriceChecker()
         response = MagicMock(status_code=200)
         response.json.return_value = []
         with patch.object(checker.session, "get", return_value=response):

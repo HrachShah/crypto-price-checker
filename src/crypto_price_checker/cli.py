@@ -75,9 +75,11 @@ class CryptoPriceChecker:
             response = self.session.get(url, params=params, timeout=15)
             if response.status_code == 200:
                 data = response.json()
+                if not isinstance(data, dict):
+                    return []
                 results = []
                 for coin_id in coin_ids:
-                    if coin_id in data:
+                    if coin_id in data and isinstance(data[coin_id], dict):
                         results.append({
                             "coin": coin_id,
                             "currency": currency,
