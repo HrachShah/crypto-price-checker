@@ -44,6 +44,14 @@ class TestCryptoPriceChecker(unittest.TestCase):
         with patch.object(checker.session, "get", return_value=response):
             self.assertIsNone(checker.get_price("bitcoin", "usd"))
 
+    def test_get_price_does_not_swallow_keyboard_interrupt(self):
+        """Control-flow interrupts must remain visible to callers."""
+        checker = CryptoPriceChecker()
+        with patch.object(checker.session, "get") as mock_get:
+            mock_get.side_effect = KeyboardInterrupt
+            with self.assertRaises(KeyboardInterrupt):
+                checker.get_price("bitcoin", "usd")
+
     def test_get_price_returns_none_on_error(self):
         """get_price returns None when API fails."""
         checker = CryptoPriceChecker()
