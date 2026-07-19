@@ -48,7 +48,7 @@ class CryptoPriceChecker:
                     return result
         except (requests.RequestException, ValueError, TypeError, KeyError):
             return None
-        except Exception:
+        except (requests.RequestException, ValueError, TypeError):
             return None
         return None
 
@@ -106,7 +106,7 @@ class CryptoPriceChecker:
                 return results
         except (requests.RequestException, ValueError, TypeError, KeyError):
             return []
-        except Exception:
+        except (requests.RequestException, ValueError, TypeError):
             return []
         return []
 
