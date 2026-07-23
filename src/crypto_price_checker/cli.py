@@ -38,11 +38,20 @@ class CryptoPriceChecker:
             if response.status_code == 200:
                 data = response.json()
                 if isinstance(data, dict) and coin_id in data and isinstance(data[coin_id], dict):
+                    price = data[coin_id].get(currency)
+                    change_24h = data[coin_id].get(f"{currency}_24h_change")
+                    if not isinstance(price, (int, float)) or isinstance(price, bool):
+                        return None
+                    if change_24h is not None and (
+                        not isinstance(change_24h, (int, float))
+                        or isinstance(change_24h, bool)
+                    ):
+                        return None
                     result = {
                         "coin": coin_id,
                         "currency": currency,
-                        "price": data[coin_id].get(currency),
-                        "change_24h": data[coin_id].get(f"{currency}_24h_change"),
+                        "price": price,
+                        "change_24h": change_24h,
                     }
                     self.CACHE[cache_key] = (now, result)
                     return result
@@ -95,11 +104,20 @@ class CryptoPriceChecker:
                 results = []
                 for coin_id in coin_ids:
                     if coin_id in data and isinstance(data[coin_id], dict):
+                        price = data[coin_id].get(currency)
+                        change_24h = data[coin_id].get(f"{currency}_24h_change")
+                        if not isinstance(price, (int, float)) or isinstance(price, bool):
+                            continue
+                        if change_24h is not None and (
+                            not isinstance(change_24h, (int, float))
+                            or isinstance(change_24h, bool)
+                        ):
+                            continue
                         results.append({
                             "coin": coin_id,
                             "currency": currency,
-                            "price": data[coin_id].get(currency),
-                            "change_24h": data[coin_id].get(f"{currency}_24h_change"),
+                            "price": price,
+                            "change_24h": change_24h,
                         })
                 if results:
                     self.CACHE[cache_key] = (now, results)
