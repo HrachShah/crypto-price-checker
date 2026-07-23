@@ -48,8 +48,6 @@ class CryptoPriceChecker:
                     return result
         except (requests.RequestException, ValueError, TypeError, KeyError):
             return None
-        except (requests.RequestException, ValueError, TypeError):
-            return None
         return None
 
     def get_prices(self, coin_ids: list[str], currency: str = "usd") -> list[dict[str, Any]]:
@@ -105,8 +103,6 @@ class CryptoPriceChecker:
                     self.CACHE[cache_key] = (now, results)
                 return results
         except (requests.RequestException, ValueError, TypeError, KeyError):
-            return []
-        except (requests.RequestException, ValueError, TypeError):
             return []
         return []
 
