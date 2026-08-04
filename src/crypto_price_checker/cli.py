@@ -1,6 +1,7 @@
 """CLI for crypto price checker."""
 
 import json
+import math
 import sys
 import time
 from typing import Any
@@ -14,6 +15,15 @@ class CryptoPriceChecker:
 
     BASE_URL = "https://api.coingecko.com/api/v3"
     CACHE_TTL = 60  # seconds
+
+    @staticmethod
+    def _is_finite_number(value: Any) -> bool:
+        if not isinstance(value, (int, float)) or isinstance(value, bool):
+            return False
+        try:
+            return math.isfinite(value)
+        except OverflowError:
+            return False
 
     def __init__(self):
         self.CACHE: dict[str, tuple[float, Any]] = {}
@@ -38,11 +48,17 @@ class CryptoPriceChecker:
             if response.status_code == 200:
                 data = response.json()
                 if isinstance(data, dict) and coin_id in data and isinstance(data[coin_id], dict):
+                    price = data[coin_id].get(currency)
+                    change_24h = data[coin_id].get(f"{currency}_24h_change")
+                    if not self._is_finite_number(price):
+                        return None
+                    if change_24h is not None and not self._is_finite_number(change_24h):
+                        return None
                     result = {
                         "coin": coin_id,
                         "currency": currency,
-                        "price": data[coin_id].get(currency),
-                        "change_24h": data[coin_id].get(f"{currency}_24h_change"),
+                        "price": price,
+                        "change_24h": change_24h,
                     }
                     self.CACHE[cache_key] = (now, result)
                     return result
@@ -93,11 +109,17 @@ class CryptoPriceChecker:
                 results = []
                 for coin_id in coin_ids:
                     if coin_id in data and isinstance(data[coin_id], dict):
+                        price = data[coin_id].get(currency)
+                        change_24h = data[coin_id].get(f"{currency}_24h_change")
+                        if not self._is_finite_number(price):
+                            continue
+                        if change_24h is not None and not self._is_finite_number(change_24h):
+                            continue
                         results.append({
                             "coin": coin_id,
                             "currency": currency,
-                            "price": data[coin_id].get(currency),
-                            "change_24h": data[coin_id].get(f"{currency}_24h_change"),
+                            "price": price,
+                            "change_24h": change_24h,
                         })
                 if results:
                     self.CACHE[cache_key] = (now, results)

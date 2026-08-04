@@ -70,6 +70,15 @@ class TestCryptoPriceChecker(unittest.TestCase):
         with patch.object(checker.session, "get", return_value=response):
             self.assertIsNone(checker.get_price("bitcoin", "usd"))
 
+    def test_get_price_returns_none_for_non_finite_payload(self):
+        """NaN and infinity must not reach the display formatter."""
+        checker = CryptoPriceChecker()
+        for price in (float("nan"), float("inf"), float("-inf")):
+            response = MagicMock(status_code=200)
+            response.json.return_value = {"bitcoin": {"usd": price}}
+            with patch.object(checker.session, "get", return_value=response):
+                self.assertIsNone(checker.get_price("bitcoin", "usd"))
+
 
     def test_get_prices_returns_empty_for_scalar_payload(self):
         """A successful scalar response cannot contain coin prices."""
