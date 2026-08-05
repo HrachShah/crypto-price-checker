@@ -1,6 +1,5 @@
 """CLI for crypto price checker."""
 
-import json
 import sys
 import time
 from typing import Any
@@ -13,10 +12,10 @@ class CryptoPriceChecker:
     """Check cryptocurrency prices via CoinGecko API."""
 
     BASE_URL = "https://api.coingecko.com/api/v3"
-    CACHE = {}
-    CACHE_TTL = 60  # seconds
+    CACHE_TTL = 60
 
     def __init__(self):
+        self.CACHE: dict[str, tuple[float, Any]] = {}
         self.session = requests.Session()
         self.session.headers["Accept"] = "application/json"
 
@@ -46,18 +45,17 @@ class CryptoPriceChecker:
                     }
                     self.CACHE[cache_key] = (now, result)
                     return result
-        except requests.RequestException:
-            pass
+        except (requests.RequestException, ValueError):
+            return None
         return None
 
     def get_prices(self, coin_ids: list[str], currency: str = "usd") -> list[dict[str, Any]]:
         """Get prices for multiple coins in a single API call."""
         if not coin_ids:
             return []
-        
+        unique_coin_ids = list(dict.fromkeys(coin_ids))
         url = f"{self.BASE_URL}/simple/price"
-        cache_key_parts = sorted(set(coin_ids))  # dedupe for consistent cache key
-        cache_key = f"{','.join(cache_key_parts)}:{currency}"
+        cache_key = f"{','.join(sorted(unique_coin_ids))}:{currency}"
         now = time.time()
 
         if cache_key in self.CACHE:
@@ -66,7 +64,7 @@ class CryptoPriceChecker:
                 return cached_data
 
         params = {
-            "ids": ",".join(coin_ids),
+            "ids": ",".join(unique_coin_ids),
             "vs_currencies": currency,
             "include_24hr_change": "true",
         }
@@ -76,7 +74,7 @@ class CryptoPriceChecker:
             if response.status_code == 200:
                 data = response.json()
                 results = []
-                for coin_id in coin_ids:
+                for coin_id in unique_coin_ids:
                     if coin_id in data:
                         results.append({
                             "coin": coin_id,
@@ -87,8 +85,8 @@ class CryptoPriceChecker:
                 if results:
                     self.CACHE[cache_key] = (now, results)
                 return results
-        except requests.RequestException:
-            pass
+        except (requests.RequestException, ValueError):
+            return []
         return []
 
 
