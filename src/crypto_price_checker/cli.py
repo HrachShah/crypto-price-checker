@@ -32,6 +32,10 @@ class CryptoPriceChecker:
 
     def get_price(self, coin_id: str, currency: str = "usd") -> dict[str, Any] | None:
         """Get current price for a coin."""
+        coin_id = coin_id.strip().lower()
+        currency = currency.strip().lower()
+        if not coin_id or not currency:
+            return None
         cache_key = f"{coin_id}:{currency}"
         now = time.time()
 
@@ -72,9 +76,11 @@ class CryptoPriceChecker:
         Cached batches are stored using a canonical key, so a cache hit must
         be rebuilt in the order requested by the caller.
         """
-        if not coin_ids:
+        coin_ids = [coin_id.strip().lower() for coin_id in coin_ids if coin_id.strip()]
+        currency = currency.strip().lower()
+        if not coin_ids or not currency:
             return []
-        
+
         url = f"{self.BASE_URL}/simple/price"
         cache_key_parts = sorted(set(coin_ids))  # dedupe for consistent cache key
         cache_key = f"{','.join(cache_key_parts)}:{currency}"

@@ -38,6 +38,31 @@ class TestCryptoPriceChecker(unittest.TestCase):
         checker.CACHE["test:usd"] = (old_time, {"price": 100.0})
         self.assertIn("test:usd", checker.CACHE)
 
+    def test_get_price_normalizes_identifiers_before_request(self):
+        """CoinGecko identifiers and currencies are case-insensitive at the CLI."""
+        checker = CryptoPriceChecker()
+        response = MagicMock(status_code=200)
+        response.json.return_value = {"bitcoin": {"usd": 50000.0}}
+        with patch.object(checker.session, "get", return_value=response) as mock_get:
+            result = checker.get_price(" Bitcoin ", " USD ")
+
+        assert result is not None
+        assert result["coin"] == "bitcoin"
+        mock_get.assert_called_once()
+        assert mock_get.call_args.kwargs["params"]["ids"] == "bitcoin"
+        assert mock_get.call_args.kwargs["params"]["vs_currencies"] == "usd"
+
+    def test_get_prices_ignores_blank_identifiers(self):
+        """Blank positional arguments must not produce an invalid API request."""
+        checker = CryptoPriceChecker()
+        response = MagicMock(status_code=200)
+        response.json.return_value = {"bitcoin": {"usd": 50000.0}}
+        with patch.object(checker.session, "get", return_value=response) as mock_get:
+            result = checker.get_prices([" ", " BITCOIN "], " USD ")
+
+        assert [item["coin"] for item in result] == ["bitcoin"]
+        assert mock_get.call_args.kwargs["params"]["ids"] == "bitcoin"
+
     def test_get_price_returns_none_for_invalid_json(self):
         """Malformed API responses should be treated as unavailable prices."""
         checker = CryptoPriceChecker()
